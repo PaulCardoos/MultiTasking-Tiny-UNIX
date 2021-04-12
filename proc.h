@@ -11,6 +11,11 @@
 #define  NPROC 4
 
 #define  N_SAVED_REGS 7
+
+#define ESP1 0x280000	/* process 1 stack starting address */
+#define ESP2 0x290000	/* process 2 stack starting address */
+#define ESP3 0x2a0000	/* process 3 stack starting address */
+
 /* 7 non-scratch CPU registers, saved in this order: */
 enum cpu_regs {SAVED_ESP, SAVED_EBX, SAVED_ESI, SAVED_EDI,
 	       SAVED_EBP, SAVED_EFLAGS, SAVED_PC};

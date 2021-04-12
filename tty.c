@@ -4,9 +4,9 @@
 *       author:         betty o'neil
 *                       Ray Zhang
 *
-*       tty driver--device-specific routines for ttys 
+*       tty driver--device-specific routines for ttys
 *
-*       Implement the alternative approach of using the IIR 
+*       Implement the alternative approach of using the IIR
 *       acknowledgement method.
 */
 #include <stdio.h>  /* for kprintf prototype */
@@ -17,6 +17,7 @@
 #include "tty_public.h"
 #include "tty.h"
 #include "queue/queue.h"
+#include "sched.h"
 
 /* define maximum size of queue */
 #define QMAX 6
@@ -28,7 +29,7 @@
 //char *debug_record;
 //extern int kprintf(char* fmt, ...);
 /* tell C about the assembler shell routines */
-extern void irq3inthand(void), irq4inthand(void); 
+extern void irq3inthand(void), irq4inthand(void);
 /* C interrupt handlers called from assembler routines */
 void irq4inthandc(void);
 void irq3inthandc(void);
@@ -104,14 +105,14 @@ int ttyread(int dev, char *buf, int nchar)
 	    buf[i++] = dequeue(&(tty->rbuf)); /* copy from rbuf Q to user buf */
 	set_eflags(saved_eflags);     /* back to previous CPU int. status */
     }
-    return nchar; 
+    return nchar;
 }
 
 
 /*====================================================================
 *
 *       tty-specific write routine for SAPC devices
-*       
+*
 */
 
 int ttywrite(int dev, char *buf, int nchar)
@@ -137,6 +138,7 @@ int ttywrite(int dev, char *buf, int nchar)
     while ( i < nchar ) {
 	cli();			/* enqueue is critical code */
 	if (enqueue( &(tty->tbuf), buf[i])!=FULLQUE) {
+      tsleep();
 	    i++;		/* success, advance one spot */
 //	    kickout(baseport);	/* make sure transmits enabled */
 	    outpt(baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
@@ -172,13 +174,13 @@ int ttycontrol(int dev, int fncode, int val)
 void irq4inthandc()
 {
     irqinthandc(TTY0);
-}                              
-  
+}
+
 void irq3inthandc()
 {
     irqinthandc(TTY1);
-}                              
-                                  
+}
+
 /* Traditional UART treatment: check the devices' ready status
    on int, shutdown tx ints if nothing more to write.
    Note: never looks at IIR, is fairly generic */
@@ -187,7 +189,7 @@ void irqinthandc(int dev)
 {
     int ch, lsr;
     char log[BUFLEN];
-   
+
    struct tty *tty = (struct tty *)(devtab[dev].dvdata);
     int baseport = devtab[dev].dvbaseport; /* hardware i/o port */;
     pic_end_int();           /* notify PIC that its part is done */
@@ -196,20 +198,20 @@ void irqinthandc(int dev)
     lsr=inpt(baseport + UART_IIR);
     switch( lsr = lsr & UART_IIR_ID)
     {
-      case UART_IIR_RDI: 
+      case UART_IIR_RDI:
        ch = inpt(baseport+UART_RX); /*read char, ack the device */
        enqueue( &tty->rbuf, ch ); /* save char in read Q (if fits in Q) */
        sprintf(log,"<%c", ch);
        debug_log(log);
-       
+
        if (tty->echoflag){	/* if echoing wanted */
         enqueue(&tty->ebuf,ch); /* echo char (if fits in Q) */
         if (queuecount( &tty->ebuf )==1)  /* if first char...*/
-		/* enable transmit interrupts also */      
+		/* enable transmit interrupts also */
           outpt( baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
        }
        break;
-           
+
       case UART_IIR_THRI:
         if (queuecount( &tty->ebuf ))/* if there is char in echo Q output it*/
           outpt( baseport+UART_TX, dequeue( &tty->ebuf ) ); /* ack tx dev */
@@ -218,16 +220,17 @@ void irqinthandc(int dev)
                ch =dequeue(&tty->tbuf);
 	       sprintf(log, ">%c", ch);
 	       debug_log(log);
+         twakeup();
 	       outpt( baseport+UART_TX, ch ) ; /* ack tx dev */
              }
-             else		/* all done transmitting */ 
+             else		/* all done transmitting */
               outpt( baseport+UART_IER, UART_IER_RDI); /* shut down tx ints */
               break;
 
         default:
 	      sprintf(log, "@%c",lsr +0x30); /* print out error: @1 to @7 except @2 or @4 */
 	      debug_log(log);
-	      } 
+	      }
 }
 
 /*void debug_log(char*msg)

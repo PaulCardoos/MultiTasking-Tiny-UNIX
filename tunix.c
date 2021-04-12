@@ -5,11 +5,20 @@
 #include <gates.h>
 #include "tsyscall.h"
 #include "tsystm.h"
+#include "proc.h"
+#include "sched.h"
 
 extern IntHandler syscall; /* the assembler envelope routine    */
-extern void ustart(void), finale(void);
+extern void ustart1(void);
+extern void ustart2(void);
+extern void ustart3(void);
+extern void schedule(int entry);
+extern void tsleep(void);
+extern void tsleep(void);
+extern void finale(void);
+
 /* kprintf is proto'd in stdio.h, but we don't need that for anything else */
-//void kprintf(char *, ...);	
+//void kprintf(char *, ...);
 
 /* functions in this file */
 void debug_set_trap_gate(int n, IntHandler *inthand_addr, int debug);
@@ -18,12 +27,14 @@ int sysexit(int);
 void k_init(void);
 void shutdown(void);
 void syscallc( int user_eax, int devcode, char *buff , int bufflen);
+void init_process_table(void);
+void process0 (void);
 
 /* Record debug info in otherwise free memory between program and stack */
 /* 0x300000 = 3M, the start of the last M of user memory on the SAPC */
 #define DEBUG_AREA 0x300000
 char *debug_log_area = (char *)DEBUG_AREA;
-char *debug_record;  /* current pointer into log area */ 
+char *debug_record;  /* current pointer into log area */
 
 #define MAX_CALL 6
 
@@ -40,7 +51,7 @@ static  struct sysent {
 void k_init(){
   debug_record = debug_log_area; /* clear debug log */
   cli();
-  ioinit();            /* initialize the deivce */ 
+  ioinit();            /* initialize the deivce */
   set_trap_gate(0x80, &syscall);   /* SET THE TRAP GATE*/
 
   /* Note: Could set these with array initializers */
@@ -48,23 +59,55 @@ void k_init(){
   sysent[TREAD].sy_call = (int (*)(int, ...))sysread;
   sysent[TWRITE].sy_call = (int (*)(int, ...))syswrite;
   sysent[TEXIT].sy_call = (int (*)(int, ...))sysexit;
- 
+
   sysent[TEXIT].sy_narg = 1;    /* set the arg number of function */
   sysent[TREAD].sy_narg = 3;
   sysent[TIOCTL].sy_narg = 3;
   sysent[TWRITE].sy_narg = 3;
   sti();			/* user runs with interrupts on */
-  ustart();
+  init_process_table();
+}
+
+void init_process_table() {
+
+	int index;
+	finished_processes = 0;
+
+	curproc = (PEntry *)&proctab;
+
+	index = 0;
+  do {
+    proctab[index].p_status = RUN;
+    proctab[index].p_savedregs[SAVED_EFLAGS] = 0x1 << 9;
+    proctab[index].p_savedregs[SAVED_EBP] = 0;
+  } while (++index < 4);
+
+  proctab[user_1].p_savedregs[SAVED_PC] = (int) &ustart1;
+  proctab[user_2].p_savedregs[SAVED_PC] = (int) &ustart2;
+  proctab[user_3].p_savedregs[SAVED_PC] = (int) &ustart3;
+
+  proctab[user_1].p_savedregs[SAVED_ESP] = ESP1;
+  proctab[user_2].p_savedregs[SAVED_ESP] = ESP2;
+  proctab[user_3].p_savedregs[SAVED_ESP] = ESP3;
+
+  process0();
 }
 
 /* shut the system down */
 void shutdown()
 {
+
+  int index= 0;
+	while (++index < NPROC)
+  {
+		kprintf("\nEXIT CODE FOR USER PROCESS %d: %d\n", index, proctab[index].p_exitval);
+  }
+
   kprintf("SHUTTING THE SYSTEM DOWN!\n");
   kprintf("Debug log from run:\n");
   kprintf("Marking kernel events as follows:\n");
   kprintf("  ^a   COM2 input interrupt, a received\n");
-  kprintf("  ~    COM2 output interrupt, ordinary char output\n");
+  kprintf("  ~b   COM2 output interrupt, ordinary char output\n");
   kprintf("  ~e   COM2 output interrupt, echo output\n");
   kprintf("  ~s   COM2 output interrupt, shutdown TX ints\n");
   kprintf("%s", debug_log_area);	/* the debug log from memory */
@@ -90,20 +133,28 @@ void syscallc( int user_eax, int devcode, char *buff , int bufflen)
 	user_eax = sysent[syscall_no].sy_call(devcode);   /* sysexit */
 	break;
     case 3:         /* 3-arg system call: calls sysread or syswrite */
-	user_eax = sysent[syscall_no].sy_call(devcode,buff,bufflen); 
+	user_eax = sysent[syscall_no].sy_call(devcode,buff,bufflen);
 	break;
     default: kprintf("bad # syscall args %d, syscall #%d\n",
 		     nargs, syscall_no);
     }
-} 
+}
 
 /****************************************************************************/
 /* sysexit: this function for the exit syscall fuction */
 /****************************************************************************/
 
-int sysexit(int exit_code){ 
-        kprintf("\n EXIT CODE IS %d\n", exit_code);
-	shutdown();  /* we have only one program here, so all done */
+int sysexit(int exit_code){
+  // kprintf("\n EXIT CODE IS %d\n", exit_code);
+	// shutdown();  /* we have only one program here, so all done */
+  curproc->p_exitval = exit_code;
+  curproc->p_status = ZOMBIE;
+	if (++finished_processes < 3) {
+		curproc = (PEntry *)&proctab;
+		process0();
+	}
+	else
+		shutdown();
 	return 0;    /* never happens, but keeps gcc happy */
 }
 
@@ -149,5 +200,3 @@ void debug_log(char *msg)
     strcpy(debug_record, msg);
     debug_record +=strlen(msg);
 }
-
-

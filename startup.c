@@ -7,7 +7,7 @@ void _startupc(void);
 
 void _startupc()
 {
-  clr_bss();			/* clear BSS area (uninitialized data) */
-  init_devio();			/* latch onto Tutor-supplied info, code */
-  k_init();			/* execute user-supplied k_init */
+  clr_bss();			   /* clear BSS area (uninitialized data) */
+  init_devio();			 /* latch onto Tutor-supplied info, code */
+  k_init();			     /* execute user-supplied k_init */
 }
