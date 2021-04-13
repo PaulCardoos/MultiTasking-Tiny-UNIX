@@ -55,19 +55,19 @@ void ttyinit(int dev)
     tty = (struct tty *)devtab[dev].dvdata; /* and software params struct */
 
     if (baseport == COM1_BASE) {
-	/* arm interrupts by installing int vec */
-	set_intr_gate(COM1_IRQ+IRQ_TO_INT_N_SHIFT, &irq4inthand);
-	/* commanding PIC to interrupt CPU for irq 4 (COM1_IRQ) */
-	pic_enable_irq(COM1_IRQ);
+      /* arm interrupts by installing int vec */
+      set_intr_gate(COM1_IRQ+IRQ_TO_INT_N_SHIFT, &irq4inthand);
+      /* commanding PIC to interrupt CPU for irq 4 (COM1_IRQ) */
+      pic_enable_irq(COM1_IRQ);
 
     } else if (baseport == COM2_BASE) {
-	/* arm interrupts by installing int vec */
-	set_intr_gate(COM2_IRQ+IRQ_TO_INT_N_SHIFT, &irq3inthand);
-	/* commanding PIC to interrupt CPU for irq 3 (COM2_IRQ) */
-	pic_enable_irq(COM2_IRQ);
+      /* arm interrupts by installing int vec */
+      set_intr_gate(COM2_IRQ+IRQ_TO_INT_N_SHIFT, &irq3inthand);
+      /* commanding PIC to interrupt CPU for irq 3 (COM2_IRQ) */
+      pic_enable_irq(COM2_IRQ);
     } else {
-	kprintf("ttyinit: Bad TTY device table entry, dev %d\n", dev);
-	return;			/* give up */
+      kprintf("ttyinit: Bad TTY device table entry, dev %d\n", dev);
+      return;			/* give up */
     }
   //  tty->echoflag = 1;		/* default to echoing */
 
@@ -98,12 +98,12 @@ int ttyread(int dev, char *buf, int nchar)
     tty = (struct tty *)devtab[dev].dvdata;   /* software data for line */
 
     while (i < nchar) { /* loop until we get user-specified # of chars */
-	saved_eflags = get_eflags();
-	cli();			/* disable ints in CPU */
-				/* for queuecount, dequeue calls */
-	if (queuecount( &(tty->rbuf) )) /* if there is something in rbuf */
-	    buf[i++] = dequeue(&(tty->rbuf)); /* copy from rbuf Q to user buf */
-	set_eflags(saved_eflags);     /* back to previous CPU int. status */
+      saved_eflags = get_eflags();
+      cli();			/* disable ints in CPU */
+      			/* for queuecount, dequeue calls */
+      if (queuecount( &(tty->rbuf) )) /* if there is something in rbuf */
+          buf[i++] = dequeue(&(tty->rbuf)); /* copy from rbuf Q to user buf */
+      set_eflags(saved_eflags);     /* back to previous CPU int. status */
     }
     return nchar;
 }
@@ -127,23 +127,31 @@ int ttywrite(int dev, char *buf, int nchar)
 
     saved_eflags = get_eflags();
     cli();			/* disable ints in CPU */
+
     /* load tx queue some to get started: this doesn't spin */
-    while ((i < nchar) && (enqueue( &(tty->tbuf), buf[i])!=FULLQUE))
-	i++;
+    while ((i < nchar) && (enqueue( &(tty->tbuf), buf[i])!=FULLQUE)) {
+      i++;
+    }
+
     /* now tell transmitter to interrupt (or restart output) */
     outpt( baseport+UART_IER, UART_IER_RDI | UART_IER_THRI); /* enable both */
     /* read and write int's */
+
     set_eflags(saved_eflags);
+
     /* loop till all chars are gotten into queue, spinning as needed */
     while ( i < nchar ) {
-	cli();			/* enqueue is critical code */
-	if (enqueue( &(tty->tbuf), buf[i])!=FULLQUE) {
-      sleep();
+      saved_eflags = get_eflags();
+      cli();			/* enqueue is critical code */
+
+    	while (enqueue(&(tty->tbuf), buf[i])!=FULLQUE) {
+          sleep(TTY0_OUTPUT);
+      }
+
+      set_eflags(saved_eflags); /* restore CPU flags */
 	    i++;		/* success, advance one spot */
-//	    kickout(baseport);	/* make sure transmits enabled */
+
 	    outpt(baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
-	}
-	set_eflags(saved_eflags); /* restore CPU flags */
     }
     return nchar;
 }
@@ -199,39 +207,41 @@ void irqinthandc(int dev)
     switch( lsr = lsr & UART_IIR_ID)
     {
       case UART_IIR_RDI:
-       ch = inpt(baseport+UART_RX); /*read char, ack the device */
-       enqueue( &tty->rbuf, ch ); /* save char in read Q (if fits in Q) */
-       // sprintf(log,"<%c", ch);
-       // debug_log(log);
-
-       if (tty->echoflag){	/* if echoing wanted */
-        enqueue(&tty->ebuf,ch); /* echo char (if fits in Q) */
-        if (queuecount( &tty->ebuf )==1)  /* if first char...*/
-		/* enable transmit interrupts also */
-          outpt( baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
+        ch = inpt(baseport+UART_RX); /*read char, ack the device */
+        enqueue( &tty->rbuf, ch ); /* save char in read Q (if fits in Q) */
+        sprintf(log,"<%c", ch);
+        debug_log(log);
+        if (tty->echoflag) {	/* if echoing wanted */
+          enqueue(&tty->ebuf,ch); /* echo char (if fits in Q) */
+          if (queuecount( &tty->ebuf )==1) {  /* if first char...*/
+          /* enable transmit interrupts also */
+            outpt( baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
+          }
        }
        break;
 
       case UART_IIR_THRI:
-        if (queuecount( &tty->ebuf ))/* if there is char in echo Q output it*/
+        if (queuecount( &tty->ebuf )) {/* if there is char in echo Q output it*/
           outpt( baseport+UART_TX, dequeue( &tty->ebuf ) ); /* ack tx dev */
-        else if (queuecount( &tty->tbuf ))  {
-	    /* if there is char in tbuf Q output it */
-               ch =dequeue(&tty->tbuf);
+          debug_log("e");
+        } else if (queuecount( &tty->tbuf ))  { /* if there is char in tbuf Q output it */
+          ch = dequeue(&tty->tbuf);
 	       // sprintf(log, ">%c", ch);
 	       // debug_log(log);
-         wakeup();
 	       outpt( baseport+UART_TX, ch ) ; /* ack tx dev */
-             }
-             else		/* all done transmitting */
-              outpt( baseport+UART_IER, UART_IER_RDI); /* shut down tx ints */
-              break;
-
-        default:
-	      // sprintf(log, "@%c",lsr +0x30); /* print out error: @1 to @7 except @2 or @4 */
-	      // debug_log(log);
+         wakeup(TTY0_OUTPUT);
+         debug_log("d");
+        } else {	/* all done transmitting */
+          outpt( baseport+UART_IER, UART_IER_RDI); /* shut down tx ints */
+          debug_log("s");
+        }
         break;
-	      }
+
+      default:
+	      sprintf(log, "@%c",lsr +0x30); /* print out error: @1 to @7 except @2 or @4 */
+	      debug_log(log);
+        break;
+      }
 }
 
 /*void debug_log(char*msg)

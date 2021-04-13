@@ -10,42 +10,37 @@ extern void debug_log(char *);
 
 void schedule(int entry) {
 
-  debug_log("|(");
-  debug_log(entry-1);
-  if (curproc->p_status == BLOCKED) {
-    debug_log("b");
-  } else if (curproc->p_status == ZOMBIE) {
-    debug_log("z");
-  }
-  debug_log("-");
-
-	PEntry * past_process = curproc;
+	PEntry * prev_process = curproc;
 
 	if (proctab[entry].p_status == RUN) {
     curproc = (PEntry *)proctab + entry;
   } else {
 		curproc = (PEntry *)proctab;
+    debug_log("|(3z-0)");
   }
 
   int	saved_eflags = get_eflags();
 	cli();
 
-	asmswtch(past_process, curproc);
+	asmswtch(prev_process, curproc);
+
 	set_eflags(saved_eflags);
 }
 
-void sleep() {
+void sleep(WaitCode event) {
 	int saved_eflags = get_eflags();
 	cli();
 	curproc->p_status = BLOCKED;
-	saved_eflags = get_eflags();
+  curproc->p_waitcode = event;
+  saved_eflags = get_eflags();
+  schedule();
 }
 
-void wakeup() {
+void wakeup(WaitCode event) {
 	int saved_eflags = get_eflags();
 	cli();
 	for (int index = 1; index < NPROC; index++) {
-		if (proctab[index].p_status == BLOCKED) {
+		if (proctab[index].p_status == BLOCKED && proctab[k].p_waitcode==event) {
       proctab[index].p_status == RUN;
     }
 	}

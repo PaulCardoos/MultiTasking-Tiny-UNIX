@@ -13,8 +13,6 @@ extern void ustart1(void);
 extern void ustart2(void);
 extern void ustart3(void);
 extern void schedule(int entry);
-extern void sleep(void);
-extern void sleep(void);
 extern void finale(void);
 
 /* kprintf is proto'd in stdio.h, but we don't need that for anything else */
@@ -68,14 +66,17 @@ void k_init(){
   sysent[TREAD].sy_narg = 3;
   sysent[TIOCTL].sy_narg = 3;
   sysent[TWRITE].sy_narg = 3;
+
   sti();			/* user runs with interrupts on */
+
   init_process_table();
+  process0();
 }
 
 void init_process_table() {
 
 	zombie_processes = 0;
-	curproc = (PEntry *)&proctab;
+	curproc = &proctab[0];
 
   proctab[0].p_savedregs[SAVED_EFLAGS] = 0x1 << 9;
   proctab[0].p_savedregs[SAVED_EBP] = 0;
@@ -98,15 +99,17 @@ void init_process_table() {
   proctab[3].p_savedregs[SAVED_EFLAGS] = 0x1 << 9;
   proctab[3].p_savedregs[SAVED_EBP] = 0;
   proctab[3].p_status = RUN;
-
-  process0();
 }
 
 void process0() {
-	for (int index = 1; index < NPROC; index++) {
-		while(proctab[index].p_status != ZOMBIE)
-			schedule(index);
-	}
+  while (zombie_processes < NPROC-1) {
+    schedule();
+  }
+	// for (int index = 1; index < NPROC; index++) {
+	// 	while(proctab[index].p_status != ZOMBIE)
+	// 		schedule(index);
+	// }
+  shutdown();
 }
 
 /* shut the system down */
@@ -117,7 +120,7 @@ void shutdown()
   kprintf("Debug log from run:\n");
   kprintf("Marking kernel events as follows:\n");
   kprintf("  ^a   COM2 input interrupt, a received\n");
-  kprintf("  ~b   COM2 output interrupt, ordinary char output\n");
+  kprintf("  ~d   COM2 output interrupt, ordinary char output\n");
   kprintf("  ~e   COM2 output interrupt, echo output\n");
   kprintf("  ~s   COM2 output interrupt, shutdown TX ints\n");
   kprintf("%s", debug_log_area);	/* the debug log from memory */
@@ -155,15 +158,18 @@ void syscallc( int user_eax, int devcode, char *buff , int bufflen)
 /****************************************************************************/
 
 int sysexit(int exit_code){
+  cli();
   curproc->p_exitval = exit_code;
   curproc->p_status = ZOMBIE;
   zombie_processes++;
-	if (zombie_processes < 3) {
-		curproc = (PEntry *)&proctab;
-		process0();
-	}
-	else
-		shutdown();
+  sti();
+  schedule();
+	// if (zombie_processes < 3) {
+	// 	curproc = (PEntry *)&proctab;
+	// 	process0();
+	// }
+	// else
+	// 	shutdown();
 	return 0;    /* never happens, but keeps gcc happy */
 }
 
