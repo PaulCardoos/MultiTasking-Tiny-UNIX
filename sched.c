@@ -17,19 +17,11 @@ void schedule() {
     if (proctab[i].p_status == RUN) {
       curproc = &proctab[i];
       break;
+    } else {
+      curproc = &proctab[0];
     }
   }
-
-  if (curproc == prev_process) {
-    curproc = &proctab[0];
-  }
-
-  // int	saved_eflags = get_eflags();
-	// cli();
-
 	asmswtch(prev_process, curproc);
-
-	// set_eflags(saved_eflags);
 }
 
 void sleep(WaitCode event) {
@@ -45,7 +37,7 @@ void wakeup(WaitCode event) {
 	// int saved_eflags = get_eflags();
 	// cli();
 	for (int index = 1; index < NPROC; index++) {
-		if (proctab[index].p_status == BLOCKED && proctab[index].p_waitcode==event) {
+		if ((proctab[index].p_status==BLOCKED) && (proctab[index].p_waitcode==event)) {
       proctab[index].p_status = RUN;
     }
 	}

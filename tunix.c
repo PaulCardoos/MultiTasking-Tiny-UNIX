@@ -12,7 +12,7 @@ extern IntHandler syscall; /* the assembler envelope routine    */
 extern void ustart1(void);
 extern void ustart2(void);
 extern void ustart3(void);
-extern void schedule();
+// extern void schedule();
 extern void finale(void);
 
 /* kprintf is proto'd in stdio.h, but we don't need that for anything else */
@@ -102,11 +102,20 @@ void init_process_table() {
 }
 
 void process0() {
-  sti();
-  while (zombie_processes < NPROC-1) {
+  // for (int i = 1; i<NPROC; i++) {
+  //   while (proctab[i].p_status != ZOMBIE ) {
+  //     sti();
+  //     cli();
+  //     schedule();
+  //   }
+  // }
+
+  while (zombie_processes<NPROC-1) {
+    sti();
     cli();
     schedule();
   }
+
 	// for (int index = 1; index < NPROC; index++) {
 	// 	while(proctab[index].p_status != ZOMBIE)
 	// 		schedule(index);
@@ -164,7 +173,7 @@ int sysexit(int exit_code){
   curproc->p_exitval = exit_code;
   curproc->p_status = ZOMBIE;
   zombie_processes++;
-  sti();
+  // sti();
   schedule();
 	// if (zombie_processes < 3) {
 	// 	curproc = (PEntry *)&proctab;

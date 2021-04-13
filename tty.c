@@ -136,7 +136,6 @@ int ttywrite(int dev, char *buf, int nchar)
     /* now tell transmitter to interrupt (or restart output) */
     outpt( baseport+UART_IER, UART_IER_RDI | UART_IER_THRI); /* enable both */
     /* read and write int's */
-
     set_eflags(saved_eflags);
 
     /* loop till all chars are gotten into queue, spinning as needed */
@@ -229,7 +228,7 @@ void irqinthandc(int dev)
 	       // sprintf(log, ">%c", ch);
 	       // debug_log(log);
 	       outpt( baseport+UART_TX, ch ) ; /* ack tx dev */
-         // cli();
+         cli();
          wakeup(TTY1_OUTPUT);
          debug_log("d");
         } else {	/* all done transmitting */
