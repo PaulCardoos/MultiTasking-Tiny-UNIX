@@ -145,7 +145,7 @@ int ttywrite(int dev, char *buf, int nchar)
       cli();			/* enqueue is critical code */
 
     	while (enqueue(&(tty->tbuf), buf[i])!=FULLQUE) {
-          sleep(TTY0_OUTPUT);
+          sleep(TTY1_OUTPUT);
       }
 
       set_eflags(saved_eflags); /* restore CPU flags */
@@ -229,7 +229,8 @@ void irqinthandc(int dev)
 	       // sprintf(log, ">%c", ch);
 	       // debug_log(log);
 	       outpt( baseport+UART_TX, ch ) ; /* ack tx dev */
-         wakeup(TTY0_OUTPUT);
+         // cli();
+         wakeup(TTY1_OUTPUT);
          debug_log("d");
         } else {	/* all done transmitting */
           outpt( baseport+UART_IER, UART_IER_RDI); /* shut down tx ints */

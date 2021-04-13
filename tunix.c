@@ -12,7 +12,7 @@ extern IntHandler syscall; /* the assembler envelope routine    */
 extern void ustart1(void);
 extern void ustart2(void);
 extern void ustart3(void);
-extern void schedule(int entry);
+extern void schedule();
 extern void finale(void);
 
 /* kprintf is proto'd in stdio.h, but we don't need that for anything else */
@@ -67,7 +67,7 @@ void k_init(){
   sysent[TIOCTL].sy_narg = 3;
   sysent[TWRITE].sy_narg = 3;
 
-  sti();			/* user runs with interrupts on */
+  // sti();			/* user runs with interrupts on */
 
   init_process_table();
   process0();
@@ -102,7 +102,9 @@ void init_process_table() {
 }
 
 void process0() {
+  sti();
   while (zombie_processes < NPROC-1) {
+    cli();
     schedule();
   }
 	// for (int index = 1; index < NPROC; index++) {
