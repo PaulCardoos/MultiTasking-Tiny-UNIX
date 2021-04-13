@@ -6,6 +6,6 @@
 .globl ustart1
 .text
 
-ustart:	    call main1                   # call main in the uprog.c
+ustart1:	  call main1                   # call main in the uprog.c
 				    pushl %eax                   # push the retval=exit_code on stack
 				    call exit                    # call sysycall exit

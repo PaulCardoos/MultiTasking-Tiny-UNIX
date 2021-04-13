@@ -138,7 +138,7 @@ int ttywrite(int dev, char *buf, int nchar)
     while ( i < nchar ) {
 	cli();			/* enqueue is critical code */
 	if (enqueue( &(tty->tbuf), buf[i])!=FULLQUE) {
-      tsleep();
+      sleep();
 	    i++;		/* success, advance one spot */
 //	    kickout(baseport);	/* make sure transmits enabled */
 	    outpt(baseport+UART_IER, UART_IER_RDI | UART_IER_THRI);
@@ -193,7 +193,7 @@ void irqinthandc(int dev)
    struct tty *tty = (struct tty *)(devtab[dev].dvdata);
     int baseport = devtab[dev].dvbaseport; /* hardware i/o port */;
     pic_end_int();           /* notify PIC that its part is done */
-    debug_log("*");
+    // debug_log("*");
 
     lsr=inpt(baseport + UART_IIR);
     switch( lsr = lsr & UART_IIR_ID)
@@ -201,8 +201,8 @@ void irqinthandc(int dev)
       case UART_IIR_RDI:
        ch = inpt(baseport+UART_RX); /*read char, ack the device */
        enqueue( &tty->rbuf, ch ); /* save char in read Q (if fits in Q) */
-       sprintf(log,"<%c", ch);
-       debug_log(log);
+       // sprintf(log,"<%c", ch);
+       // debug_log(log);
 
        if (tty->echoflag){	/* if echoing wanted */
         enqueue(&tty->ebuf,ch); /* echo char (if fits in Q) */
@@ -218,9 +218,9 @@ void irqinthandc(int dev)
         else if (queuecount( &tty->tbuf ))  {
 	    /* if there is char in tbuf Q output it */
                ch =dequeue(&tty->tbuf);
-	       sprintf(log, ">%c", ch);
-	       debug_log(log);
-         twakeup();
+	       // sprintf(log, ">%c", ch);
+	       // debug_log(log);
+         wakeup();
 	       outpt( baseport+UART_TX, ch ) ; /* ack tx dev */
              }
              else		/* all done transmitting */
@@ -228,8 +228,9 @@ void irqinthandc(int dev)
               break;
 
         default:
-	      sprintf(log, "@%c",lsr +0x30); /* print out error: @1 to @7 except @2 or @4 */
-	      debug_log(log);
+	      // sprintf(log, "@%c",lsr +0x30); /* print out error: @1 to @7 except @2 or @4 */
+	      // debug_log(log);
+        break;
 	      }
 }
 
